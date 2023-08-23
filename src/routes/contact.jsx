@@ -1,14 +1,42 @@
-import { Form } from "react-router-dom";
+import {
+    useLoaderData,
+    Form,
+    useFetcher,
+} from "react-router-dom";
+import { getContact, updateContact } from "../contacts";
+
+
+export async function loader({ params }) {
+    const contact = await getContact(params.contactId);
+    if (!contact) {
+        throw new Response("", {
+            status: 404,
+            statusText: "Not Found",
+        });
+    }
+    return { contact };
+};
+
+export async function action({ request, params }) {
+    let formData = await request.formData();
+    return updateContact(params.contactId, {
+        favorite: formData.get("favorite") === "true",
+    });
+}
 
 export default function Contact() {
-    const contact = {
-        first: "Your",
-        last: "Name",
-        avatar: "https://placekitten.com/g/200/200",
-        twitter: "your_handle",
-        notes: "Some notes",
-        favorite: true,
-    };
+    const { contact } = useLoaderData();
+
+    // const contact = {
+    //     first: "First",
+    //     last: "Last",
+    //     avatar: "https://placekitten.com/g/200/200",
+    //     website: "your_handle",
+    //     number: "xxx-xxx-xxxx",
+    //     notes: "Some notes",
+    //     favorite: true,
+    // };
+
 
     return (
         <div id="contact">
@@ -26,21 +54,25 @@ export default function Contact() {
                             {contact.first} {contact.last}
                         </>
                     ) : (
-                        <i>No Name</i>
+                        <i> No Name</i>
                     )}{" "}
+
                     <Favorite contact={contact} />
                 </h1>
 
-                {contact.twitter && (
+                {contact.website && (
                     <p>
                         <a
                             target="_blank"
-                            href={`https://twitter.com/${contact.twitter}`}
+                            className="website"
+                            href={`https://${contact.website}`}
                         >
-                            {contact.twitter}
+                            https://{contact.website}
                         </a>
                     </p>
                 )}
+
+                {contact.number && <p>{contact.number}</p>}
 
                 {contact.notes && <p>{contact.notes}</p>}
 
@@ -69,11 +101,17 @@ export default function Contact() {
     );
 }
 
+
 function Favorite({ contact }) {
-    // yes, this is a `let` for later
+    const fetcher = useFetcher();
+
     let favorite = contact.favorite;
+    if (fetcher.formData) {
+        favorite = fetcher.formData.get("favorite") === "true";
+    };
+
     return (
-        <Form method="post">
+        <fetcher.Form method="post">
             <button
                 name="favorite"
                 value={favorite ? "false" : "true"}
@@ -85,6 +123,6 @@ function Favorite({ contact }) {
             >
                 {favorite ? "★" : "☆"}
             </button>
-        </Form>
+        </fetcher.Form>
     );
 }

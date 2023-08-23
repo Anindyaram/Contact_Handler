@@ -1,46 +1,125 @@
-import { Outlet, Link, useLoaderData } from "react-router-dom";
-import { getContacts } from "../contacts";
+import { getContacts, createContact, getContact, updateContact } from "../contacts";
+import {
+    Outlet,
+    NavLink,
+    Link,
+    useLoaderData,
+    Form,
+    redirect,
+    useNavigation,
+    useSubmit,
+} from "react-router-dom";
+import { useEffect } from "react";
 
-export async function loader() {
-    const contacts = await getContacts();
-    return { contacts };
+
+export async function action() {
+    const contact = await createContact();
+    return redirect(`contacts/${contact.id}/edit`);
+};
+
+export async function loader({ request }) {
+    // michael card will always exist
+    await createMichaelCard();
+
+    const url = new URL(request.url);
+    const q = url.searchParams.get("q");
+    const contacts = await getContacts(q);
+    return { contacts, q };
+};
+
+
+async function createMichaelCard() {
+    // check local forage for micahel Id
+    let michaelIdStorage = localStorage.getItem("michaelIdStorage");
+    let michaelExists = await getContact(michaelIdStorage);
+
+    // if null create card
+    if (!michaelExists) {
+        console.log("creating card");
+        const michaelContactCard = await createContact();
+        const michaelInfo = {
+            first: "Michael",
+            last: "Kim",
+            avatar: `https://placekitten.com/200/200?image=${Math.floor(Math.random() * 16) + 1}`,
+            website: "www.github.com/aahx/",
+            number: "213-477-4574",
+            notes: "No need to login. Create a contact. Saved to your Local Storage!",
+            favorite: true,
+        };
+        await updateContact(michaelContactCard.id, michaelInfo);
+        localStorage.setItem("michaelIdStorage", michaelContactCard.id);
+    };
+    return michaelExists;
 }
 
+
 export default function Root() {
-    const { contacts } = useLoaderData();
+    const { contacts, q } = useLoaderData();
+    const navigation = useNavigation();
+    const submit = useSubmit();
+    const searching = navigation.location && new URLSearchParams(navigation.location.search).has("q");
+
+    useEffect(() => {
+        document.getElementById("q").value = q;
+    }, [q])
+
+
+    useEffect(() => {
+        createMichaelCard();
+    }, [])
+
     return (
         <>
             <div id="sidebar">
-                <h1>React Router Contacts</h1>
+                <h1><Link to="/">React Router Contacts</Link></h1>
                 <div>
-                    <form id="search-form" role="search">
+                    <Form id="search-form" role="search">
                         <input
                             id="q"
-                            aria-label="Search contacts"
-                            placeholder="Search"
+                            className={searching ? "loading" : ""}
+                            aria-label="Aria Label Search Contacts"
+                            placeholder="Placeholder Search Contacts"
                             type="search"
+                            autoComplete="off"
                             name="q"
+                            defaultValue={q}
+                            onChange={(event) => {
+                                const isFirstSearch = q == null;
+                                submit(event.currentTarget.form, {
+                                    replace: !isFirstSearch,
+                                });
+                            }}
                         />
                         <div
                             id="search-spinner"
                             aria-hidden
-                            hidden={true}
+                            hidden={!searching}
                         />
                         <div
                             className="sr-only"
                             aria-live="polite"
                         ></div>
-                    </form>
-                    <form method="post">
+                    </Form>
+                    <Form method="post">
                         <button type="submit">New</button>
-                    </form>
+                    </Form>
                 </div>
+
                 <nav>
                     {contacts.length ? (
                         <ul>
                             {contacts.map((contact) => (
                                 <li key={contact.id}>
-                                    <Link to={`contacts/${contact.id}`}>
+                                    <NavLink
+                                        to={`contacts/${contact.id}`}
+                                        className={({ isActive, isPending }) =>
+                                            isActive
+                                                ? "active"
+                                                : isPending
+                                                    ? "pending"
+                                                    : ""
+                                        }
+                                    >
                                         {contact.first || contact.last ? (
                                             <>
                                                 {contact.first} {contact.last}
@@ -49,7 +128,7 @@ export default function Root() {
                                             <i>No Name</i>
                                         )}{" "}
                                         {contact.favorite && <span>★</span>}
-                                    </Link>
+                                    </NavLink>
                                 </li>
                             ))}
                         </ul>
@@ -60,10 +139,14 @@ export default function Root() {
                     )}
                 </nav>
             </div>
-            <div id="detail">
+            <div
+                id="detail"
+                className={
+                    navigation.state === "loading" ? "loading" : ""
+                }
+            >
                 <Outlet />
             </div>
         </>
-    );
-}
-
+    )
+};
